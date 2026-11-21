@@ -15,6 +15,14 @@ jobs:
       - name: Get the code
         uses: actions/checkout@v4
 
+      - name: Unpack the project zip
+        run: |
+          ZIP="$(ls *.zip | head -n 1)"
+          echo "Using $ZIP"
+          mkdir build-src
+          unzip -q "$ZIP" -d build-src
+          ls -la build-src build-src/app
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -27,10 +35,11 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build the APK
+        working-directory: build-src
         run: gradle assembleDebug --no-daemon
 
       - name: Name the APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk ShiftPlanner.apk
+        run: cp build-src/app/build/outputs/apk/debug/app-debug.apk ShiftPlanner.apk
 
       - name: Keep a copy on this run
         uses: actions/upload-artifact@v4
