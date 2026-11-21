@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Shift Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout concept: one-column phone app. Next-shift card on top, two quick stats, then a week-by-week list; edits happen in a bottom sheet. */
+:root{
+  --bg:#EDF2F5;
+  --surface:#FFFFFF;
+  --ink:#14202B;
+  --muted:#53626F;
+  --line:#D6DFE6;
+  --accent:#0A6B5C;
+  --on-accent:#FFFFFF;
+  --accent-soft:#DDF1EC;
+  --night:#4338CA;
+  --night-soft:#E7E5FB;
+  --danger:#B42318;
+  --danger-soft:#FDE8E6;
+  --shadow:0 6px 20px rgba(20,32,43,.22);
+  --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-display:'Space Grotesk','Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D141A;
+    --surface:#17212A;
+    --ink:#E8EEF3;
+    --muted:#9DAEBD;
+    --line:#28353F;
+    --accent:#4CC9AE;
+    --on-accent:#05241E;
+    --accent-soft:#143A33;
+    --night:#ABA6FF;
+    --night-soft:#27234F;
+    --danger:#FF8F84;
+    --danger-soft:#3A1B18;
+    --shadow:0 6px 20px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D141A;
+  --surface:#17212A;
+  --ink:#E8EEF3;
+  --muted:#9DAEBD;
+  --line:#28353F;
+  --accent:#4CC9AE;
+  --on-accent:#05241E;
+  --accent-soft:#143A33;
+  --night:#ABA6FF;
+  --night-soft:#27234F;
+  --danger:#FF8F84;
+  --danger-soft:#3A1B18;
+  --shadow:0 6px 20px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font:400 15px/1.45 var(--font-body);
+  padding-block:20px 120px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.app{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{margin:4px 0 0;font:700 32px/1.1 var(--font-display);text-wrap:balance}
+h2{margin:0}
+
+/* Next shift */
+.next{background:var(--accent);color:var(--on-accent);border-radius:20px;padding:18px 18px 16px;min-width:0}
+.next .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.next .label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+.next .count{font-size:14px;font-weight:600}
+.next .day{font:700 30px/1.1 var(--font-display);margin-top:10px}
+.next .time{font:500 22px/1.2 var(--font-display);margin-top:2px}
+.next .meta{font-size:14px;margin-top:8px}
+.next.quiet{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.next.quiet .label{color:var(--muted)}
+.next.quiet .msg{margin-top:8px;font-size:15px}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.stat .v{font:700 26px/1.1 var(--font-display)}
+.stat .l{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* Tabs */
+.tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px}
+.tab{min-height:44px;border:0;border-radius:10px;background:transparent;font-weight:600;cursor:pointer;color:var(--muted)}
+.tab[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+/* Weeks */
+.weeks{display:flex;flex-direction:column;gap:20px}
+.wk-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:0 2px 8px}
+.wk-head h2{font:700 20px/1.2 var(--font-display)}
+.wk-tag{display:inline-block;margin-left:6px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:none;padding:1px 8px;border-radius:999px;vertical-align:1px}
+.wk-total{text-align:right;font-size:13px;color:var(--muted)}
+.wk-total b{display:block;font:700 18px/1.2 var(--font-display);color:var(--ink)}
+.rows{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.shift{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:14px;align-items:center;width:100%;min-height:68px;padding:12px 14px;background:transparent;border:0;border-top:1px solid var(--line);text-align:left;cursor:pointer}
+.shift:first-child{border-top:0}
+.shift:hover{background:var(--bg)}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);border-radius:12px;padding:6px 0}
+.tile .dow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--muted)}
+.tile .num{font:700 22px/1.1 var(--font-display)}
+.tile .mon{font-size:12px;color:var(--muted)}
+.mid{display:flex;flex-direction:column;gap:3px;min-width:0}
+.times{font:700 20px/1.2 var(--font-display)}
+.sub{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;padding:2px 9px;border-radius:999px}
+.pill.night{background:var(--night-soft);color:var(--night)}
+.note{font-size:13px;color:var(--ink);overflow-wrap:anywhere}
+.right{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.hrs{font-size:17px;font-weight:700}
+.paid{font-size:12px;color:var(--muted)}
+.done{margin-top:4px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px}
+.shift.past .times,.shift.past .hrs{color:var(--muted)}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:16px;padding:22px 18px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font:700 17px/1.3 var(--font-display);margin-bottom:4px}
+
+/* Add button and toast */
+.fab{position:fixed;right:max(16px, env(safe-area-inset-right, 0px));bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:5;min-height:52px;padding:0 22px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:16px;box-shadow:var(--shadow);cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom, 0px));z-index:30;max-width:calc(100% - 32px);background:var(--ink);color:var(--bg);padding:12px 16px;border-radius:12px;display:flex;align-items:center;gap:14px;font-weight:500;box-shadow:var(--shadow)}
+.toast button{background:transparent;border:0;color:inherit;font-weight:700;text-decoration:underline;cursor:pointer;min-height:32px;padding:0 4px}
+
+/* Sheet */
+.backdrop{position:fixed;inset:0;z-index:20;background:rgba(8,14,20,.6);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:520px;max-height:94%;overflow:auto;background:var(--surface);border-radius:22px 22px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom, 0px));display:flex;flex-direction:column;gap:14px}
+.sheet h2{font:700 22px/1.2 var(--font-display)}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-size:13px;font-weight:600;color:var(--muted)}
+.opt{font-weight:400}
+.field input{height:48px;border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:0 12px;font-size:16px;width:100%;min-width:0}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.calc{background:var(--accent-soft);color:var(--ink);border-radius:12px;padding:10px 12px;font-size:14px}
+.hint{font-size:12.5px;color:var(--muted);margin:-4px 0 0}
+.err{background:var(--danger-soft);color:var(--danger);border-radius:12px;padding:10px 12px;font-size:14px;font-weight:500}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grow{flex:1 1 0}
+.btn{min-height:48px;padding:0 20px;border-radius:12px;border:1px solid var(--line);background:transparent;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.danger{color:var(--danger);border-color:var(--danger-soft);background:var(--danger-soft)}
+@media (min-width:600px){
+  .backdrop{align-items:center}
+  .sheet{border-radius:22px}
+}
+@media (prefers-reduced-motion:no-preference){
+  .tab,.shift,.fab{transition:background-color .15s}
+}
+</style>
+
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="eyebrow">Burger King</div>
+    <h1>Zamil's shifts</h1>
+  </header>
+
+  <section id="next" class="next quiet" aria-label="Next shift">
+    <div class="label">Next shift</div>
+    <div class="msg">Loading your shifts…</div>
+  </section>
+
+  <div class="stats" id="stats" hidden></div>
+
+  <div class="tabs" role="group" aria-label="Which shifts to show">
+    <button type="button" class="tab" id="tabUp" aria-pressed="true">Upcoming</button>
+    <button type="button" class="tab" id="tabAll" aria-pressed="false">All shifts</button>
+  </div>
+
+  <div class="weeks" id="list">
+    <div class="empty"><b>Your shifts will appear here</b>They load from your saved schedule.</div>
+  </div>
+</div>
+
+<button type="button" class="fab" id="addBtn" hidden>
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  Add shift
+</button>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<div class="backdrop" id="backdrop" hidden>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h2 id="sheetTitle">Edit shift</h2>
+    <form id="form" novalidate>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="field"><label for="fDate">Date</label><input id="fDate" type="date" required></div>
+        <div class="two">
+          <div class="field"><label for="fStart">Starts</label><input id="fStart" type="time" required></div>
+          <div class="field"><label for="fEnd">Ends</label><input id="fEnd" type="time" required></div>
+        </div>
+        <div class="field"><label for="fNote">Note <span class="opt">(optional)</span></label><input id="fNote" type="text" maxlength="80" placeholder="e.g. swapped, cover shift"></div>
+        <div class="calc" id="calc" aria-live="polite"></div>
+        <p class="hint">Paid hours take 30 min off shifts of 5 h or longer, as on your roster. An end time before the start means the shift runs past midnight.</p>
+        <div class="err" id="err" role="alert" hidden></div>
+        <div class="actions">
+          <button type="button" class="btn danger" id="delBtn">Delete</button>
+          <span class="grow"></span>
+          <button type="button" class="btn" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn primary">Save</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var MOON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+
+  var shifts = [];
+  var loaded = false;
+  var dbOff = false;
+  var col = null;
+  var tab = 'upcoming';
+  var editingId = null;
+  var deleteArmed = false;
+  var lastDeleted = null;
+  var toastTimer = null;
+  var lastFocus = null;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var nextEl = $('next'), statsEl = $('stats'), listEl = $('list');
+  var addBtn = $('addBtn'), toastEl = $('toast');
+  var backdrop = $('backdrop'), sheet = $('sheet'), form = $('form');
+  var fDate = $('fDate'), fStart = $('fStart'), fEnd = $('fEnd'), fNote = $('fNote');
+  var calcEl = $('calc'), errEl = $('err'), delBtn = $('delBtn');
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parseDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '');
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  function toMin(t) {
+    var m = /^(\d{2}):(\d{2})$/.exec(t || '');
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    return +m[1] * 60 + +m[2];
+  }
+  function fmtH(n) { return String(Math.round(n * 100) / 100); }
+  function dayLabel(d) { return DOW[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()]; }
+
+  function info(s) {
+    var d = parseDate(s.date), a = toMin(s.start), b = toMin(s.end);
+    if (!d || a === null || b === null || a === b) return null;
+    var dur = (b - a + 1440) % 1440;
+    var startAt = new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(a / 60), a % 60);
+    var endAt = new Date(startAt.getTime() + dur * 60000);
+    var crosses = b < a;
+    var kind = ((crosses && b > 0) || a >= 1320) ? 'Night' : a < 720 ? 'Morning' : a < 1020 ? 'Afternoon' : 'Evening';
+    var endsText = '';
+    if (crosses) endsText = b === 0 ? 'ends at midnight' : 'ends ' + DOW[endAt.getDay()] + ' ' + endAt.getDate() + ' ' + MON[endAt.getMonth()];
+    return {
+      id: s.id, date: s.date, start: s.start, end: s.end, note: s.note || '',
+      day: d, startAt: startAt, endAt: endAt, paid: dur / 60 - (dur >= 300 ? 0.5 : 0),
+      kind: kind, endsText: endsText
+    };
+  }
+
+  function mondayOf(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x;
+  }
+  function weekLabel(mon) {
+    var sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+    if (mon.getMonth() === sun.getMonth()) return mon.getDate() + ' – ' + sun.getDate() + ' ' + MON[sun.getMonth()];
+    return mon.getDate() + ' ' + MON[mon.getMonth()] + ' – ' + sun.getDate() + ' ' + MON[sun.getMonth()];
+  }
+  function countdown(startAt, now) {
+    var ms = startAt - now;
+    if (ms <= 0) return 'now';
+    var mins = Math.round(ms / 60000);
+    if (mins < 60) return 'in ' + mins + ' min';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return 'in ' + hrs + ' h ' + (mins % 60) + ' min';
+    if (hrs < 48) return 'in ' + hrs + ' h';
+    return 'in ' + Math.floor(hrs / 24) + ' days';
+  }
+
+  function items() {
+    return shifts.map(info).filter(Boolean).sort(function (a, b) { return a.startAt - b.startAt; });
+  }
+
+  function renderNext(all, now) {
+    if (dbOff) {
+      nextEl.className = 'next quiet';
+      nextEl.innerHTML = '<div class="label">Next shift</div><div class="msg">Saved shifts can\'t load in this view. Open this page in the Claude app, signed in, to see and edit them.</div>';
+      return;
+    }
+    if (!loaded) {
+      nextEl.className = 'next quiet';
+      nextEl.innerHTML = '<div class="label">Next shift</div><div class="msg">Loading your shifts…</div>';
+      return;
+    }
+    var nx = null;
+    for (var i = 0; i < all.length; i++) { if (all[i].endAt > now) { nx = all[i]; break; } }
+    if (!nx) {
+      nextEl.className = 'next quiet';
+      nextEl.innerHTML = '<div class="label">Next shift</div><div class="msg">No upcoming shifts. Tap Add shift when a new one is rostered.</div>';
+      return;
+    }
+    var live = nx.startAt <= now;
+    nextEl.className = 'next';
+    nextEl.innerHTML =
+      '<div class="row"><span class="label">' + (live ? 'On shift now' : 'Next shift') + '</span><span class="count">' + (live ? 'until ' + esc(nx.end) : esc(countdown(nx.startAt, now))) + '</span></div>' +
+      '<div class="day">' + esc(dayLabel(nx.day)) + '</div>' +
+      '<div class="time">' + esc(nx.start) + ' – ' + esc(nx.end) + '</div>' +
+      '<div class="meta">' + fmtH(nx.paid) + ' paid hours · ' + nx.kind + (nx.endsText ? ' · ' + esc(nx.endsText) : '') + '</div>';
+  }
+
+  function renderStats(all, now) {
+    if (!loaded || dbOff) { statsEl.hidden = true; return; }
+    var mon = iso(mondayOf(now));
+    var wkH = 0, wkN = 0, left = 0;
+    all.forEach(function (it) {
+      if (iso(mondayOf(it.day)) === mon) { wkH += it.paid; wkN++; }
+      if (it.endAt > now) left += it.paid;
+    });
+    statsEl.hidden = false;
+    statsEl.innerHTML =
+      '<div class="stat"><div class="v">' + fmtH(wkH) + ' h</div><div class="l">This week · ' + wkN + (wkN === 1 ? ' shift' : ' shifts') + '</div></div>' +
+      '<div class="stat"><div class="v">' + fmtH(left) + ' h</div><div class="l">Still to work</div></div>';
+  }
+
+  function rowHtml(it, now) {
+    var past = it.endAt <= now;
+    var kindHtml = it.kind === 'Night'
+      ? '<span class="pill night">' + MOON + 'Night</span>'
+      : '<span>' + it.kind + '</span>';
+    var ends = it.endsText ? '<span>· ' + esc(it.endsText) + '</span>' : '';
+    var note = it.note ? '<span class="note">' + esc(it.note) + '</span>' : '';
+    return '<button type="button" class="shift' + (past ? ' past' : '') + '" data-id="' + esc(it.id) + '" aria-label="Edit shift on ' + esc(dayLabel(it.day)) + ', ' + esc(it.start) + ' to ' + esc(it.end) + '">' +
+      '<span class="tile"><span class="dow">' + DOW[it.day.getDay()] + '</span><span class="num">' + it.day.getDate() + '</span><span class="mon">' + MON[it.day.getMonth()] + '</span></span>' +
+      '<span class="mid"><span class="times">' + esc(it.start) + ' – ' + esc(it.end) + '</span><span class="sub">' + kindHtml + ends + '</span>' + note + '</span>' +
+      '<span class="right"><span class="hrs">' + fmtH(it.paid) + ' h</span><span class="paid">paid</span>' + (past ? '<span class="done">Done</span>' : '') + '</span>' +
+      '</button>';
+  }
+
+  function renderList(all, now) {
+    if (dbOff) { listEl.innerHTML = '<div class="empty"><b>No saved shifts to show</b>Open this page in the Claude app to see them.</div>'; return; }
+    if (!loaded) { listEl.innerHTML = '<div class="empty"><b>Your shifts will appear here</b>They load from your saved schedule.</div>'; return; }
+    var groups = {}, order = [];
+    all.forEach(function (it) {
+      var k = iso(mondayOf(it.day));
+      if (!groups[k]) { groups[k] = { mon: mondayOf(it.day), items: [] }; order.push(k); }
+      groups[k].items.push(it);
+    });
+    var curMon = iso(mondayOf(now));
+    var html = '';
+    order.forEach(function (k) {
+      var g = groups[k];
+      var vis = g.items.filter(function (it) { return tab === 'all' || it.endAt > now; });
+      if (!vis.length) return;
+      var total = g.items.reduce(function (a, it) { return a + it.paid; }, 0);
+      html += '<section class="week"><div class="wk-head"><div><div class="eyebrow">Week of' + (k === curMon ? '<span class="wk-tag">This week</span>' : '') + '</div>' +
+        '<h2>' + weekLabel(g.mon) + '</h2></div>' +
+        '<div class="wk-total"><b>' + fmtH(total) + ' h</b>' + g.items.length + (g.items.length === 1 ? ' shift' : ' shifts') + '</div></div>' +
+        '<div class="rows">' + vis.map(function (it) { return rowHtml(it, now); }).join('') + '</div></section>';
+    });
+    if (!html) {
+      html = tab === 'all'
+        ? '<div class="empty"><b>No shifts yet</b>Tap Add shift to enter your first one.</div>'
+        : '<div class="empty"><b>No upcoming shifts</b>Tap Add shift when a new one is rostered.</div>';
+    }
+    listEl.innerHTML = html;
+  }
+
+  function render() {
+    var now = new Date();
+    var all = items();
+    renderNext(all, now);
+    renderStats(all, now);
+    renderList(all, now);
+    addBtn.hidden = false;
+    $('tabUp').setAttribute('aria-pressed', String(tab === 'upcoming'));
+    $('tabAll').setAttribute('aria-pressed', String(tab === 'all'));
+  }
+
+  /* Toast */
+  function toast(msg, actionLabel, action) {
+    clearTimeout(toastTimer);
+    toastEl.innerHTML = '<span>' + esc(msg) + '</span>';
+    if (actionLabel) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = actionLabel;
+      b.addEventListener('click', function () { hideToast(); action(); });
+      toastEl.appendChild(b);
+    }
+    toastEl.hidden = false;
+    toastTimer = setTimeout(hideToast, actionLabel ? 7000 : 2600);
+  }
+  function hideToast() { toastEl.hidden = true; }
+
+  /* Editor sheet */
+  function showErr(msg) { errEl.textContent = msg; errEl.hidden = !msg; }
+  function updateCalc() {
+    var it = info({ date: fDate.value, start: fStart.value, end: fEnd.value });
+    if (!it) { calcEl.textContent = 'Enter a date and two different times to see the paid hours.'; return; }
+    calcEl.textContent = fmtH(it.paid) + ' paid hours · ' + it.kind + (it.endsText ? ', ' + it.endsText : '');
+  }
+  function openSheet(id) {
+    lastFocus = document.activeElement;
+    editingId = id || null;
+    deleteArmed = false;
+    delBtn.textContent = 'Delete';
+    showErr('');
+    var s = null;
+    if (id) { shifts.forEach(function (x) { if (x.id === id) s = x; }); }
+    $('sheetTitle').textContent = s ? 'Edit shift' : 'Add shift';
+    fDate.value = s ? s.date : iso(new Date());
+    fStart.value = s ? s.start : '09:00';
+    fEnd.value = s ? s.end : '17:00';
+    fNote.value = s ? (s.note || '') : '';
+    delBtn.hidden = !s;
+    updateCalc();
+    backdrop.hidden = false;
+    fDate.focus();
+  }
+  function closeSheet() {
+    backdrop.hidden = true;
+    editingId = null;
+    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} }
+  }
+  function saveErrText(e) {
+    if (e && e.code === 'quota_exceeded') return 'The shift limit for this page is full. Delete an old shift first.';
+    return 'Could not save. Check your connection and try again.';
+  }
+  function save() {
+    var it = info({ date: fDate.value, start: fStart.value, end: fEnd.value });
+    if (!it) { showErr('Pick a date and two different times.'); return; }
+    var data = { date: fDate.value, start: fStart.value, end: fEnd.value, note: fNote.value.trim() };
+    var before = shifts.slice();
+    if (editingId) {
+      shifts = shifts.map(function (x) {
+        return x.id === editingId ? { id: x.id, date: data.date, start: data.start, end: data.end, note: data.note } : x;
+      });
+    } else {
+      shifts.push({ id: newId(), date: data.date, start: data.start, end: data.end, note: data.note });
+    }
+    if (!persist()) { shifts = before; showErr('Could not save on this phone. Free up some storage and try again.'); return; }
+    closeSheet();
+    render();
+    toast('Shift saved');
+  }
+  function removeShift() {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      delBtn.textContent = 'Tap again to delete';
+      return;
+    }
+    var id = editingId, s = null;
+    shifts.forEach(function (x) { if (x.id === id) s = x; });
+    if (!s) { closeSheet(); return; }
+    var before = shifts.slice();
+    var removed = { id: id, date: s.date, start: s.start, end: s.end, note: s.note || '' };
+    shifts = shifts.filter(function (x) { return x.id !== id; });
+    if (!persist()) { shifts = before; showErr('Could not delete. Try again.'); return; }
+    closeSheet();
+    render();
+    lastDeleted = removed;
+    toast('Shift deleted', 'Undo', function () {
+      shifts.push(lastDeleted);
+      persist();
+      render();
+      toast('Shift restored');
+    });
+  }
+
+  /* Wiring */
+  $('tabUp').addEventListener('click', function () { tab = 'upcoming'; render(); });
+  $('tabAll').addEventListener('click', function () { tab = 'all'; render(); });
+  addBtn.addEventListener('click', function () { openSheet(null); });
+  listEl.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.shift') : null;
+    if (b && b.getAttribute('data-id')) openSheet(b.getAttribute('data-id'));
+  });
+  form.addEventListener('submit', function (e) { e.preventDefault(); save(); });
+  [fDate, fStart, fEnd].forEach(function (el) {
+    el.addEventListener('input', updateCalc);
+    el.addEventListener('change', updateCalc);
+  });
+  $('cancelBtn').addEventListener('click', closeSheet);
+  delBtn.addEventListener('click', removeShift);
+  backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeSheet(); });
+  document.addEventListener('keydown', function (e) {
+    if (backdrop.hidden) return;
+    if (e.key === 'Escape') { closeSheet(); return; }
+    if (e.key === 'Tab') {
+      var f = sheet.querySelectorAll('input,button:not([hidden])');
+      var els = Array.prototype.filter.call(f, function (x) { return !x.hidden && !x.disabled; });
+      if (!els.length) return;
+      var first = els[0], last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+
+  /* Data: saved on this phone. The first time the app opens it is filled from the roster. */
+  var KEY = 'shift-planner.shifts.v1';
+  var SEED = [
+    ['2026-11-09', '15:00', '22:00'],
+    ['2026-11-10', '11:00', '17:00'],
+    ['2026-11-13', '23:00', '05:00'],
+    ['2026-11-16', '11:00', '16:00'],
+    ['2026-11-18', '17:00', '21:00'],
+    ['2026-11-20', '15:00', '23:00'],
+    ['2026-11-24', '16:00', '23:00'],
+    ['2026-11-25', '17:00', '00:00'],
+    ['2026-11-28', '23:00', '07:00'],
+    ['2026-11-29', '23:00', '07:00'],
+    ['2026-11-30', '23:00', '05:00'],
+    ['2026-12-03', '09:30', '13:30'],
+    ['2026-12-07', '15:00', '22:00'],
+    ['2026-12-11', '23:00', '05:00'],
+    ['2026-12-14', '11:00', '16:00'],
+    ['2026-12-16', '17:00', '21:00'],
+    ['2026-12-18', '15:00', '23:00'],
+    ['2026-12-22', '16:00', '00:00'],
+    ['2026-12-23', '17:00', '00:00'],
+    ['2026-12-26', '23:00', '07:00'],
+    ['2026-12-27', '23:00', '07:00'],
+    ['2026-12-28', '23:00', '05:00'],
+    ['2026-12-31', '09:30', '13:30'],
+    ['2027-01-01', '12:00', '18:00'],
+    ['2027-01-04', '15:00', '22:00'],
+    ['2027-01-08', '23:00', '05:00'],
+    ['2027-01-11', '11:00', '16:00'],
+    ['2027-01-14', '09:00', '15:00'],
+    ['2027-01-15', '15:00', '23:00'],
+    ['2027-01-20', '17:00', '00:00'],
+    ['2027-01-23', '23:00', '07:00'],
+    ['2027-01-24', '23:00', '07:00'],
+    ['2027-01-25', '23:00', '05:00'],
+    ['2027-01-28', '09:30', '13:30']
+  ];
+  function newId() { return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function validShift(x) {
+    return x && typeof x.id === 'string' && typeof x.date === 'string' && typeof x.start === 'string' && typeof x.end === 'string';
+  }
+  function load() {
+    try {
+      var raw = window.localStorage.getItem(KEY);
+      if (!raw) return null;
+      var a = JSON.parse(raw);
+      if (!Array.isArray(a)) return null;
+      return a.filter(validShift).map(function (x) {
+        return { id: x.id, date: x.date, start: x.start, end: x.end, note: typeof x.note === 'string' ? x.note : '' };
+      });
+    } catch (e) { return null; }
+  }
+  function persist() {
+    try { window.localStorage.setItem(KEY, JSON.stringify(shifts)); return true; } catch (e) { return false; }
+  }
+  var stored = load();
+  if (stored) {
+    shifts = stored;
+  } else {
+    shifts = SEED.map(function (r) {
+      return { id: r[0].replace(/-/g, '') + '-' + r[1].replace(':', ''), date: r[0], start: r[1], end: r[2], note: '' };
+    });
+    persist();
+  }
+  loaded = true;
+  render();
+  setInterval(render, 60000);
+})();
+</script>
+</body>
+</html>
