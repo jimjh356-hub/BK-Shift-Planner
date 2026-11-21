@@ -1,0 +1,46 @@
+name: Build Android app
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Build the APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Name the APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk ShiftPlanner.apk
+
+      - name: Keep a copy on this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShiftPlanner-apk
+          path: ShiftPlanner.apk
+
+      - name: Publish a download link
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Shift Planner build ${{ github.run_number }}
+          files: ShiftPlanner.apk
